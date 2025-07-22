@@ -107,7 +107,7 @@ def generate_files(df, output_folder="exports_cm"):
 
 st.title("📊 Générateur de fichiers Media Carrefour")
 
-uploaded_file = st.file_uploader("Dépose ici le fichier Excel du URL Builder", type=["xlsx"])
+uploaded_file = st.file_uploader("Dépose ici le fichier Excel de l'URL Builder", type=["xlsx"])
 
 if uploaded_file is not None:
     try:

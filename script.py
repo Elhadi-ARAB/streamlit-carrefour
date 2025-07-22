@@ -37,6 +37,19 @@ def generate_files(df, output_folder="exports_cm"):
     grouped = df.groupby(["Nom de la campagne*", "Début  JJ/MM/AAAA", "Fin  JJ/MM/AAAA"])
     filepaths = []
 
+    # ✅ Liste des sites à insérer dans le 2e onglet
+    site_list = [
+        "M6_FRA", "TF1_FRA", "Socialyse_FRA", "Canal +_FRA", "Youtube_FRA", "BidManager_DfaSite_563002",
+        "Spotify_FRA", "nrj.fr", "Lagardere_FRA", "DV360 - Jellyfish - Local",
+        "DART Search : Google : 506200", "DV360 - Jellyfish - Traiteur", "Altice Media FR",
+        "DV360 - Jellyfish - Mini Sites", "Yummipets", "DV360 - Jellyfish - Branding",
+        "191 Media", "DV360 - Jellyfish - Voyage", "Criteo", "Snapchat FR", "Pinterest FR",
+        "DV360 - Jellyfish - Marque", "FR_NRJGlobal", "DV360 - Jellyfish - Cartes Cadeaux",
+        "Azerion FR", "Carrefour Energies", "DV360 - CRF Marketing - Agence 79", "Mappy",
+        "SoundCast", "Groupe Sncf", "Seedtag_FR", "BonjourRATP", "366", "Viewpay", "Ogury",
+        "LeBonCoin", "TheBradery"
+    ]
+
     for (campagne, start, end), group in grouped:
         if pd.isna(campagne) or pd.isna(start) or pd.isna(end):
             continue
@@ -71,14 +84,20 @@ def generate_files(df, output_folder="exports_cm"):
             continue
 
         df_table = pd.DataFrame(rows)
+        df_sites_sheet = pd.DataFrame(site_list, columns=["Site Name"])
+
         safe_name = campagne.replace(" ", "_").replace("/", "_")
         filename = f"CM_{safe_name}_carrefour.xlsx"
         filepath = os.path.join(output_folder, filename)
 
         with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+            # Onglet principal (données de campagne)
             for i, (key, val) in enumerate(header_data.items()):
                 pd.DataFrame([[key, val]]).to_excel(writer, index=False, header=False, startrow=i, startcol=0)
             df_table.to_excel(writer, index=False, startrow=9)
+
+            # ➕ Ajout de l'onglet Sites
+            df_sites_sheet.to_excel(writer, index=False, sheet_name="Sites")
 
         filepaths.append(filepath)
 

@@ -111,7 +111,7 @@ uploaded_file = st.file_uploader("Dépose ici le fichier Excel de l'URL Builder"
 
 if uploaded_file is not None:
     try:
-        df = pd.read_excel(uploaded_file, sheet_name="A79 - Display URL BUILDER", skiprows=1)
+        df = pd.read_excel(uploaded_file, sheet_name="URL BUILDER", skiprows=1)
         df = df.dropna(how='all')
         df["Début  JJ/MM/AAAA"] = pd.to_datetime(df["Début  JJ/MM/AAAA"], errors='coerce')
         df["Fin  JJ/MM/AAAA"] = pd.to_datetime(df["Fin  JJ/MM/AAAA"], errors='coerce')

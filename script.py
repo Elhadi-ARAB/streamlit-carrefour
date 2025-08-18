@@ -77,7 +77,8 @@ def generate_files(df, output_folder="exports_cm"):
                 "Format": row["Format size (CM only)"],
                 "Placement_Name": row["Placement CM = creative DV360"],
                 "Creative_Name": row["Creative Name"],
-                "Add_ClickTroughUrl": row["URL de redirection trackée"]
+                "Add_ClickTroughUrl": row["URL de redirection trackée"],
+                "IMPRESSION_JAVASCRIPT_EVENT_TAG" : row["XPLN script CM"]
             })
 
         if not rows:

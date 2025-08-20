@@ -50,6 +50,7 @@ def _sanitize_text_for_utm(s: str) -> str:
     s = (s.replace("é", "e").replace("è", "e")
            .replace("É", "E").replace("È", "E"))
     # remplacer les caractères spéciaux listés par "_"
+    s = s.replace(" ", "_").replace("\t", "_")
     s = "".join("_" if ch in _SPECIALS else ch for ch in s)
     return s
 
@@ -191,5 +192,6 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+
 
 

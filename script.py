@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import time
 import urllib.parse
+import unicodedata
 
 
 
@@ -38,49 +39,41 @@ def map_tracking_type(value):
     
 # --- Sanitize des valeurs UTM uniquement ---
 
-
-_SPECIALS = set(list('!"#$%&\'()*+,/:;<=?>@[\\]^`{|}~'))  # caractères à remplacer
+_SPECIALS = set(list('!"#$%&\'()*+,/:;<=?>@[\\]^`{|}~'))
 _UTM_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
 
 def _sanitize_text_for_utm(s: str) -> str:
     if s is None:
         return s
     s = str(s)
-    # convertir é/è -> e (et majuscules)
-    s = (s.replace("é", "e").replace("è", "e")
-           .replace("É", "E").replace("È", "E"))
-    # remplacer les caractères spéciaux listés par "_"
+
+    # Normaliser (décomposer caractères accentués) puis supprimer accents
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
+    # remplacer espace et tab par "_"
     s = s.replace(" ", "_").replace("\t", "_")
+
+    # remplacer les caractères spéciaux listés par "_"
     s = "".join("_" if ch in _SPECIALS else ch for ch in s)
+
     return s
 
 def sanitize_url_utm_values(url: str) -> str:
-    """
-    Ne modifie que les valeurs des paramètres UTM.
-    Conserve schéma, hôte, chemin et autres paramètres intacts.
-    Reconstruction manuelle de la query pour ne pas ré-encoder nos underscores.
-    """
     if not url or not isinstance(url, str):
         return url
     try:
         parts = urllib.parse.urlsplit(url)
         query_pairs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
 
-        # Nettoyer uniquement les valeurs des UTM
         new_pairs = []
         for k, v in query_pairs:
             if k.lower() in _UTM_KEYS:
                 v = _sanitize_text_for_utm(v)
-            # ⚠️ k et v sont déjà “propres” pour notre besoin : on reconstruit sans urlencode
-            # mais on protège quand même le signe & dans la valeur pour ne pas casser le split
-            v = str(v).replace("&", "%26")
             new_pairs.append(f"{k}={v}")
 
         new_query = "&".join(new_pairs)
-        sanitized = urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
-        return sanitized
+        return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
     except Exception:
-        # En cas d'URL non parseable, on retourne tel quel pour ne pas la casser
         return url
 
 def generate_files(df, output_folder="exports_cm"):
@@ -192,6 +185,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+
 
 
 

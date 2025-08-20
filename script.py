@@ -182,7 +182,7 @@ if uploaded_file is not None:
                 duration = round(time.time() - start, 2)
 
             st.success(f"✅ {len(paths)} fichiers générés en {duration} secondes.")
-            st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail en colonne B (ligne Consultant_Email). Merci 🙏")
+            st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail dans le new excel (ligne 1 colonne B). Merci 🙏")
 
             for p in paths:
                 with open(p, "rb") as f:
@@ -191,4 +191,5 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+
 

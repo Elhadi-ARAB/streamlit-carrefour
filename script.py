@@ -8,7 +8,6 @@ import unicodedata
 
 
 
-
 # === Listes de mots-clés pour le mapping ===
 video_keywords = [
     "In-Stream-Classic", "In-Stream-Trueview", "Video-Dynamic-Creative", "Connected-TV",
@@ -39,42 +38,134 @@ def map_tracking_type(value):
     
 # --- Sanitize des valeurs UTM uniquement ---
 
-_SPECIALS = set(list('!"#$%&\'()*+,/:;<=?>@[\\]^`{|}~'))
+
+import os
+import re
+import unicodedata
+import urllib.parse
+import pandas as pd
+
+_SPECIALS = set(list('!"#$%&\'()*+,/:;<=?>@[\\]^`{|}~'))  # caractères à remplacer par "_"
 _UTM_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
 
+def _strip_accents(s: str) -> str:
+    """Supprime les accents de manière générique (é→e, ñ→n, etc.)."""
+    nfkd = unicodedata.normalize("NFKD", s)
+    return "".join(ch for ch in nfkd if not unicodedata.combining(ch))
+
 def _sanitize_text_for_utm(s: str) -> str:
+    """Sanitize destiné UNIQUEMENT aux valeurs UTM."""
     if s is None:
         return s
     s = str(s)
-
-    # Normaliser (décomposer caractères accentués) puis supprimer accents
-    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
-
-    # remplacer espace et tab par "_"
-    s = s.replace(" ", "_").replace("\t", "_")
-
-    # remplacer les caractères spéciaux listés par "_"
+    s = _strip_accents(s)
+    # remplace les caractères “spéciaux” par underscore, on garde .-_ et les lettres/chiffres
     s = "".join("_" if ch in _SPECIALS else ch for ch in s)
-
+    # compacte les underscores multiples
+    s = re.sub(r"_+", "_", s).strip("_")
     return s
 
+def _idna_hostname(host: str) -> str:
+    """Normalise le nom d’hôte (lowercase + IDNA)."""
+    if not host:
+        return host
+    host = host.strip().lower()
+    try:
+        return host.encode("idna").decode("ascii")
+    except Exception:
+        return host
+
+def _normalize_path(path: str) -> str:
+    """
+    Normalise le chemin :
+    - évite le double-encodage des % déjà présents
+    - encode les caractères non sûrs selon RFC 3986
+    """
+    if path is None or path == "":
+        return "/"
+    # on “décode” une fois puis on ré-encode proprement
+    unquoted = urllib.parse.unquote(path)
+    # safe: on garde / % et les caractères réservés usuels en path
+    return urllib.parse.quote(unquoted, safe="/%:@-._~!$&'()*+,;=")
+
+def _encode_q_value(v: str) -> str:
+    """Encode standard pour les valeurs de query (hors UTM)."""
+    if v is None:
+        return ""
+    # on évite de ré-encoder les % des séquences %XX déjà valides
+    return urllib.parse.quote_plus(v, safe="%:@-._~!$'()*,")
+
+def normalize_url_preserving_utm(url: str) -> str:
+    """
+    1) Normalise schéma/hôte/chemin.
+    2) Re-encode proprement TOUTES les paires query, SAUF les valeurs UTM.
+       - UTM : on ne modifie pas le texte, on échappe seulement & et = pour ne pas casser la query.
+       - Non-UTM : encodage standard (quote_plus).
+    """
+    if not url or not isinstance(url, str):
+        return url
+
+    u = url.strip()
+    if u.startswith("www."):
+        u = "https://" + u  # ajout d’un schéma par défaut si nécessaire
+
+    parts = urllib.parse.urlsplit(u)
+
+    scheme = (parts.scheme or "https").lower()
+    netloc = _idna_hostname(parts.netloc)
+    path = _normalize_path(parts.path)
+
+    # Parse query, en conservant l’ordre et les valeurs vides
+    pairs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+
+    new_pairs = []
+    for k, v in pairs:
+        k_enc = urllib.parse.quote(k, safe="%:@-._~")  # clés toujours encodées proprement
+
+        if k.lower() in _UTM_KEYS:
+            # NE PAS modifier la valeur UTM elle-même.
+            # On protège seulement les séparateurs de query.
+            v_safe = (v or "")
+            v_safe = v_safe.replace("&", "%26").replace("=", "%3D")
+            new_pairs.append(f"{k_enc}={v_safe}")
+        else:
+            v_enc = _encode_q_value(v or "")
+            new_pairs.append(f"{k_enc}={v_enc}")
+
+    new_query = "&".join(new_pairs)
+
+    # Fragment : on l’encode proprement sans double-encodage
+    fragment = urllib.parse.quote(urllib.parse.unquote(parts.fragment or ""), safe="%:@-._~!$&'()*+,;=/")
+
+    return urllib.parse.urlunsplit((scheme, netloc, path, new_query, fragment))
+
 def sanitize_url_utm_values(url: str) -> str:
+    """
+    2) Ne modifie QUE les valeurs des paramètres UTM.
+       Conserve schéma, hôte, chemin et autres paramètres intacts.
+    """
     if not url or not isinstance(url, str):
         return url
     try:
         parts = urllib.parse.urlsplit(url)
-        query_pairs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+        pairs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
 
         new_pairs = []
-        for k, v in query_pairs:
+        for k, v in pairs:
             if k.lower() in _UTM_KEYS:
-                v = _sanitize_text_for_utm(v)
-            new_pairs.append(f"{k}={v}")
+                raw = _sanitize_text_for_utm(v)
+                # Protéger & et = pour ne pas casser la query
+                raw = raw.replace("&", "%26").replace("=", "%3D")
+                new_pairs.append(f"{urllib.parse.quote(k, safe='%:@-._~')}={raw}")
+            else:
+                # On remet la paire telle quelle (déjà encodée par normalize_url_preserving_utm)
+                new_pairs.append(f"{urllib.parse.quote(k, safe='%:@-._~')}={v}")
 
         new_query = "&".join(new_pairs)
         return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
     except Exception:
         return url
+
 
 def generate_files(df, output_folder="exports_cm"):
     os.makedirs(output_folder, exist_ok=True)
@@ -115,9 +206,13 @@ def generate_files(df, output_folder="exports_cm"):
             site_name = "DV360 - CRF Marketing - Agence 79" if str(row["Régie"]).strip() == "Open" else str(row["Régie"]).strip()
             tracking_type = map_tracking_type(row["Tracking Type"])
             
-            # ✅ URL nettoyée (UTM uniquement)
             original_url = row.get("URL de redirection trackée")
-            safe_url = sanitize_url_utm_values(original_url)
+
+            # Étape 1 : normalisation complète sans toucher au contenu UTM
+            formatted_url = normalize_url_preserving_utm(original_url)
+
+            # Étape 2 : nettoyage des valeurs UTM uniquement (accents → ascii, spéciaux → _)
+            safe_url = sanitize_url_utm_values(formatted_url)
 
 
             rows.append({
@@ -176,7 +271,8 @@ if uploaded_file is not None:
                 duration = round(time.time() - start, 2)
 
             st.success(f"✅ {len(paths)} fichiers générés en {duration} secondes.")
-            st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail dans le new excel (ligne 1 colonne B). Merci 🙏")
+            st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail en colonne B (ligne Consultant_Email). Merci 🙏")
+
 
             for p in paths:
                 with open(p, "rb") as f:
@@ -185,7 +281,3 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
-
-
-
-

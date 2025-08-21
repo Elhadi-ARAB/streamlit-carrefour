@@ -176,17 +176,17 @@ def generate_files(df, output_folder="exports_cm"):
     filepaths = []
 
     # ✅ Liste des sites à insérer dans le 2e onglet
-    site_list = [
-        "M6_FRA", "TF1_FRA", "Socialyse_FRA", "Canal +_FRA", "Youtube_FRA", "BidManager_DfaSite_563002",
-        "Spotify_FRA", "nrj.fr", "Lagardere_FRA", "DV360 - Jellyfish - Local",
-        "DART Search : Google : 506200", "DV360 - Jellyfish - Traiteur", "Altice Media FR",
-        "DV360 - Jellyfish - Mini Sites", "Yummipets", "DV360 - Jellyfish - Branding",
-        "191 Media", "DV360 - Jellyfish - Voyage", "Criteo", "Snapchat FR", "Pinterest FR",
-        "DV360 - Jellyfish - Marque", "FR_NRJGlobal", "DV360 - Jellyfish - Cartes Cadeaux",
-        "Azerion FR", "Carrefour Energies", "DV360 - CRF Marketing - Agence 79", "Mappy",
-        "SoundCast", "Groupe Sncf", "Seedtag_FR", "BonjourRATP", "366", "Viewpay", "Ogury",
-        "LeBonCoin", "TheBradery"
-    ]
+    # site_list = [
+    #     "M6_FRA", "TF1_FRA", "Socialyse_FRA", "Canal +_FRA", "Youtube_FRA", "BidManager_DfaSite_563002",
+    #     "Spotify_FRA", "nrj.fr", "Lagardere_FRA", "DV360 - Jellyfish - Local",
+    #     "DART Search : Google : 506200", "DV360 - Jellyfish - Traiteur", "Altice Media FR",
+    #     "DV360 - Jellyfish - Mini Sites", "Yummipets", "DV360 - Jellyfish - Branding",
+    #     "191 Media", "DV360 - Jellyfish - Voyage", "Criteo", "Snapchat FR", "Pinterest FR",
+    #     "DV360 - Jellyfish - Marque", "FR_NRJGlobal", "DV360 - Jellyfish - Cartes Cadeaux",
+    #     "Azerion FR", "Carrefour Energies", "DV360 - CRF Marketing - Agence 79", "Mappy",
+    #     "SoundCast", "Groupe Sncf", "Seedtag_FR", "BonjourRATP", "366", "Viewpay", "Ogury",
+    #     "LeBonCoin", "TheBradery"
+    # ]
 
     for (campagne, start, end), group in grouped:
         if pd.isna(campagne) or pd.isna(start) or pd.isna(end):
@@ -206,7 +206,7 @@ def generate_files(df, output_folder="exports_cm"):
             if pd.isna(row["Format size (CM only)"]):
                 continue
 
-            site_name = "DV360 - CRF Marketing - Agence 79" if str(row["Régie"]).strip() == "Open" else str(row["Régie"]).strip()
+            site_name = "DV360 - CRF Marketing - Agence 79" if str(row["Platform"]).strip() == "DV360" else str(row["Régie"]).strip()
             tracking_type = map_tracking_type(row["Tracking Type"])
             
             original_url = row.get("URL de redirection trackée")
@@ -232,7 +232,7 @@ def generate_files(df, output_folder="exports_cm"):
             continue
 
         df_table = pd.DataFrame(rows)
-        df_sites_sheet = pd.DataFrame(site_list, columns=["Site Name"])
+        # df_sites_sheet = pd.DataFrame(site_list, columns=["Site Name"])
 
         safe_name = campagne.replace(" ", "_").replace("/", "_")
         filename = f"CM_{safe_name}_carrefour.xlsx"
@@ -244,8 +244,8 @@ def generate_files(df, output_folder="exports_cm"):
                 pd.DataFrame([[key, val]]).to_excel(writer, index=False, header=False, startrow=i, startcol=0)
             df_table.to_excel(writer, index=False, startrow=9)
 
-            # ➕ Ajout de l'onglet Sites
-            df_sites_sheet.to_excel(writer, index=False, sheet_name="Sites")
+            # # ➕ Ajout de l'onglet Sites
+            # df_sites_sheet.to_excel(writer, index=False, sheet_name="Sites")
 
         filepaths.append(filepath)
 
@@ -284,3 +284,4 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+

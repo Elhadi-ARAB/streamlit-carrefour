@@ -1,9 +1,12 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 import time
 import urllib.parse
 import unicodedata
+
+
 
 
 
@@ -36,16 +39,8 @@ def map_tracking_type(value):
     
     
     
-# --- Sanitize des valeurs UTM uniquement ---
 
-
-import os
-import re
-import unicodedata
-import urllib.parse
-import pandas as pd
-
-_SPECIALS = set(list('!"#$%&\'()*+,/:;<=?>@[\\]^`{|}~'))  # caractères à remplacer par "_"
+_SPECIALS = set(list('!"#$%&\'()*+,/:;<=?>@[\\]^{|}~%'))  # caractères à remplacer par "_"
 _UTM_KEYS = {"utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
 
 def _strip_accents(s: str) -> str:
@@ -54,14 +49,12 @@ def _strip_accents(s: str) -> str:
     return "".join(ch for ch in nfkd if not unicodedata.combining(ch))
 
 def _sanitize_text_for_utm(s: str) -> str:
-    """Sanitize destiné UNIQUEMENT aux valeurs UTM."""
     if s is None:
         return s
     s = str(s)
     s = _strip_accents(s)
-    # remplace les caractères “spéciaux” par underscore, on garde .-_ et les lettres/chiffres
-    s = "".join("_" if ch in _SPECIALS else ch for ch in s)
-    # compacte les underscores multiples
+    # 🔁 remplace espaces ET caractères spéciaux par "_"
+    s = "".join("_" if (ch in _SPECIALS or ch.isspace()) else ch for ch in s)
     s = re.sub(r"_+", "_", s).strip("_")
     return s
 
@@ -120,17 +113,22 @@ def normalize_url_preserving_utm(url: str) -> str:
 
     new_pairs = []
     for k, v in pairs:
-        k_enc = urllib.parse.quote(k, safe="%:@-._~")  # clés toujours encodées proprement
+        k_enc = urllib.parse.quote(k, safe="%:@-._~")  # clés encodées proprement
 
         if k.lower() in _UTM_KEYS:
-            # NE PAS modifier la valeur UTM elle-même.
-            # On protège seulement les séparateurs de query.
             v_safe = (v or "")
             v_safe = v_safe.replace("&", "%26").replace("=", "%3D")
-            new_pairs.append(f"{k_enc}={v_safe}")
+            if v_safe == "":
+                new_pairs.append(f"{k_enc}")            # ❗ pas de "=" si vide
+            else:
+                new_pairs.append(f"{k_enc}={v_safe}")
         else:
             v_enc = _encode_q_value(v or "")
-            new_pairs.append(f"{k_enc}={v_enc}")
+            if v_enc == "":
+                new_pairs.append(f"{k_enc}")            # ❗ pas de "=" si vide
+            else:
+                new_pairs.append(f"{k_enc}={v_enc}")
+
 
     new_query = "&".join(new_pairs)
 
@@ -152,14 +150,19 @@ def sanitize_url_utm_values(url: str) -> str:
 
         new_pairs = []
         for k, v in pairs:
+            k_enc = urllib.parse.quote(k, safe="%:@-._~")
             if k.lower() in _UTM_KEYS:
                 raw = _sanitize_text_for_utm(v)
-                # Protéger & et = pour ne pas casser la query
-                raw = raw.replace("&", "%26").replace("=", "%3D")
-                new_pairs.append(f"{urllib.parse.quote(k, safe='%:@-._~')}={raw}")
+                raw = (raw or "").replace("&", "%26").replace("=", "%3D")
+                if raw == "":
+                    new_pairs.append(f"{k_enc}")            # ❗ pas de "=" si vide
+                else:
+                    new_pairs.append(f"{k_enc}={raw}")
             else:
-                # On remet la paire telle quelle (déjà encodée par normalize_url_preserving_utm)
-                new_pairs.append(f"{urllib.parse.quote(k, safe='%:@-._~')}={v}")
+                if v == "":
+                    new_pairs.append(f"{k_enc}")            # ❗ pas de "=" si vide
+                else:
+                    new_pairs.append(f"{k_enc}={v}")
 
         new_query = "&".join(new_pairs)
         return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))

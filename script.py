@@ -197,8 +197,8 @@ def generate_files(df, output_folder="exports_cm"):
             "Campaign_Name": campagne,
             "Advertiser Name": "NEW Carrefour One - Havas",
             "Landing page": "https://www.carrefour.fr/",
-            "Start_Date": start.strftime('%d/%m/%Y'),
-            "End_Date": end.strftime('%d/%m/%Y')
+            "Start_Date": start,
+            "End_Date": end
         }
 
         rows = []
@@ -284,4 +284,5 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+
 

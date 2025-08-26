@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import os
@@ -26,6 +27,10 @@ display_keywords = [
     "Display-habillage-sliding", "Display-habillage-swapping", "Pixel+Click-Command"
 ]
 
+
+ALLOWED_PLATFORMS = ["DV360", "Ogury", "Seedtag_FR", "Spotify_FRA", "M6+"]
+
+
 def map_tracking_type(value):
     val = str(value).strip()
     if val in video_keywords:
@@ -35,7 +40,9 @@ def map_tracking_type(value):
     elif val in display_keywords:
         return "DISPLAY"
     else:
+        print(f"⚠️ Format Type non reconnu: {val}. Contactez l'équipe Data.")
         return "OTHER"
+
     
     
     
@@ -174,19 +181,8 @@ def generate_files(df, output_folder="exports_cm"):
     os.makedirs(output_folder, exist_ok=True)
     grouped = df.groupby(["Nom de la campagne*", "Début  JJ/MM/AAAA", "Fin  JJ/MM/AAAA"])
     filepaths = []
-
-    # ✅ Liste des sites à insérer dans le 2e onglet
-    # site_list = [
-    #     "M6_FRA", "TF1_FRA", "Socialyse_FRA", "Canal +_FRA", "Youtube_FRA", "BidManager_DfaSite_563002",
-    #     "Spotify_FRA", "nrj.fr", "Lagardere_FRA", "DV360 - Jellyfish - Local",
-    #     "DART Search : Google : 506200", "DV360 - Jellyfish - Traiteur", "Altice Media FR",
-    #     "DV360 - Jellyfish - Mini Sites", "Yummipets", "DV360 - Jellyfish - Branding",
-    #     "191 Media", "DV360 - Jellyfish - Voyage", "Criteo", "Snapchat FR", "Pinterest FR",
-    #     "DV360 - Jellyfish - Marque", "FR_NRJGlobal", "DV360 - Jellyfish - Cartes Cadeaux",
-    #     "Azerion FR", "Carrefour Energies", "DV360 - CRF Marketing - Agence 79", "Mappy",
-    #     "SoundCast", "Groupe Sncf", "Seedtag_FR", "BonjourRATP", "366", "Viewpay", "Ogury",
-    #     "LeBonCoin", "TheBradery"
-    # ]
+    ignored_platforms = []   # plateformes non autorisées
+    unknown_tracking = []    # tracking type non reconnus
 
     for (campagne, start, end), group in grouped:
         if pd.isna(campagne) or pd.isna(start) or pd.isna(end):
@@ -206,17 +202,25 @@ def generate_files(df, output_folder="exports_cm"):
             if pd.isna(row["Format size (CM only)"]):
                 continue
 
-            site_name = "DV360 - CRF Marketing - Agence 79" if str(row["Platform"]).strip() == "DV360" else str(row["Régie"]).strip()
-            tracking_type = map_tracking_type(row["Tracking Type"])
-            
+            # ➜ contrôle plateforme
+            platform = str(row["Platform"]).strip()
+            if platform not in ALLOWED_PLATFORMS:
+                ignored_platforms.append((campagne, platform))
+                continue
+
+            # ➜ mapping spécifique DV360
+            site_name = "DV360 - CRF Marketing - Agence 79" if platform == "DV360" else platform
+
+            # ➜ contrôle Tracking Type
+            raw_tracking = row.get("Tracking Type", "")
+            tracking_type = map_tracking_type(raw_tracking)
+            if tracking_type == "OTHER":
+                unknown_tracking.append((campagne, str(raw_tracking).strip()))
+                continue  # on n’inclut pas cette ligne dans l’export
+
             original_url = row.get("URL de redirection trackée")
-
-            # Étape 1 : normalisation complète sans toucher au contenu UTM
             formatted_url = normalize_url_preserving_utm(original_url)
-
-            # Étape 2 : nettoyage des valeurs UTM uniquement (accents → ascii, spéciaux → _)
             safe_url = sanitize_url_utm_values(formatted_url)
-
 
             rows.append({
                 "Site Name": site_name,
@@ -225,31 +229,27 @@ def generate_files(df, output_folder="exports_cm"):
                 "Placement_Name": row["Placement CM = creative DV360"],
                 "Creative_Name": row["Creative Name"],
                 "Add_ClickTroughUrl": safe_url,
-                "IMPRESSION_JAVASCRIPT_EVENT_TAG" : row["XPLN script CM"]
+                "IMPRESSION_JAVASCRIPT_EVENT_TAG": row["XPLN script CM"]
             })
 
         if not rows:
             continue
 
         df_table = pd.DataFrame(rows)
-        # df_sites_sheet = pd.DataFrame(site_list, columns=["Site Name"])
-
-        safe_name = campagne.replace(" ", "_").replace("/", "_")
+        safe_name = str(campagne).replace(" ", "_").replace("/", "_")
         filename = f"CM_{safe_name}_carrefour.xlsx"
         filepath = os.path.join(output_folder, filename)
 
         with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-            # Onglet principal (données de campagne)
             for i, (key, val) in enumerate(header_data.items()):
                 pd.DataFrame([[key, val]]).to_excel(writer, index=False, header=False, startrow=i, startcol=0)
             df_table.to_excel(writer, index=False, startrow=9)
 
-            # # ➕ Ajout de l'onglet Sites
-            # df_sites_sheet.to_excel(writer, index=False, sheet_name="Sites")
-
         filepaths.append(filepath)
 
-    return filepaths
+    # ➜ on renvoie les deux rapports d’erreurs
+    return filepaths, ignored_platforms, unknown_tracking
+
 
 # === Interface Streamlit ===
 
@@ -270,19 +270,36 @@ if uploaded_file is not None:
         if st.button("🚀 Générer les fichiers"):
             with st.spinner("⏳ Génération des fichiers en cours..."):
                 start = time.time()
-                paths = generate_files(df)
+                paths, ignored_platforms, unknown_tracking = generate_files(df)
                 duration = round(time.time() - start, 2)
 
-            st.success(f"✅ {len(paths)} fichiers générés en {duration} secondes.")
-            st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail en colonne B (ligne Consultant_Email). Merci 🙏")
+            has_error = False
 
+            # ⚠️ Plateformes non autorisées
+            if ignored_platforms:
+                has_error = True
+                st.error("❌ Des lignes ont été ignorées car la plateforme n’est pas autorisée :")
+                for campagne, plat in ignored_platforms:
+                    st.write(f"- Campagne **{campagne}** → Plateforme non reconnue : **{plat}**")
 
-            for p in paths:
-                with open(p, "rb") as f:
-                    data = f.read()
-                st.download_button(label=f"Télécharger {os.path.basename(p)}", data=data, file_name=os.path.basename(p))
+            # ⚠️ Tracking Type non reconnu
+            if unknown_tracking:
+                has_error = True
+                st.error("❌ Des lignes ont été ignorées car le 'Tracking Type' est non reconnu :")
+                for campagne, trk in unknown_tracking:
+                    st.write(f"- Campagne **{campagne}** → Tracking Type non reconnu : **{trk}**")
+                st.info("ℹ️ Valeurs acceptées : vérifiez dans l’onglet Input A79 de l’URL Builder si le Tracking Type y est bien renseigné")
+
+            if has_error:
+                st.warning("🚫 Aucun fichier n’a été généré. Corrigez le fichier source puis réessayez.")
+            else:
+                st.success(f"✅ {len(paths)} fichiers générés en {duration} secondes.")
+                st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail en colonne B (ligne Consultant_Email). Merci 🙏")
+                for p in paths:
+                    with open(p, "rb") as f:
+                        data = f.read()
+                    st.download_button(label=f"Télécharger {os.path.basename(p)}", data=data, file_name=os.path.basename(p))
+
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
-
-

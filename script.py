@@ -209,7 +209,15 @@ def generate_files(df, output_folder="exports_cm"):
                 continue
 
             # ➜ mapping spécifique DV360
-            site_name = "DV360 - CRF Marketing - Agence 79" if platform == "DV360" else platform
+            if platform == "DV360":
+                site_name = "DV360 - CRF Marketing - Agence 79"
+            elif platform == "TF1":
+                site_name = "TF1_FRA"
+            elif platform == "SNCF":
+                site_name = "Groupe Sncf"
+            else:
+                site_name = platform
+
 
             # ➜ contrôle Tracking Type
             raw_tracking = row.get("Tracking Type", "")
@@ -303,3 +311,4 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+

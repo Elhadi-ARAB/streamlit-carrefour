@@ -28,7 +28,7 @@ display_keywords = [
 ]
 
 
-ALLOWED_PLATFORMS = ["DV360", "Ogury", "Seedtag_FR", "Spotify_FRA", "M6+","TF1","SNCF"]
+ALLOWED_PLATFORMS = ["DV360", "Ogury", "Seedtag_FR", "Spotify_FRA", "M6+","TF1","SNCF","SportEasy"]
 
 
 def map_tracking_type(value):
@@ -311,5 +311,6 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"❌ Erreur lors du traitement du fichier : {e}")
+
 
 

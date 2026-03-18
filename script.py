@@ -303,10 +303,11 @@ if uploaded_file is not None:
             else:
                 st.success(f"✅ {len(paths)} fichiers générés en {duration} secondes.")
                 st.info("ℹ️ N’oubliez pas d’introduire votre adresse mail en colonne B (ligne Consultant_Email). Merci 🙏")
-                for p in paths:
+                for i, p in enumerate(paths):
                     with open(p, "rb") as f:
                         data = f.read()
-                    st.download_button(label=f"Télécharger {os.path.basename(p)}", data=data, file_name=os.path.basename(p))
+                    st.download_button(label=f"Télécharger {os.path.basename(p)}", data=data, file_name=os.path.basename(p), key=f"download_{i}")
+
 
 
     except Exception as e:

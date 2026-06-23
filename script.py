@@ -28,7 +28,7 @@ display_keywords = [
 ]
 
 
-ALLOWED_PLATFORMS = ["DV360", "Ogury", "Seedtag_FR", "Spotify_FRA", "M6+","TF1","SNCF","SportEasy","Teads_FRA","Dailymotion_FRA","MPP"]
+ALLOWED_PLATFORMS = ["DV360", "Ogury", "Seedtag_FR", "Spotify_FRA", "M6+","TF1","SNCF","SportEasy","Teads_FRA","Dailymotion_FRA","MPP", "Rakuten_FR" ]
 
 
 def map_tracking_type(value):
